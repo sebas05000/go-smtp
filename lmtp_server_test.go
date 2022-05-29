@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emersion/go-smtp"
+	"github.com/sebas05000/go-smtp"
 )
 
 func sendDeliveryCmdsLMTP(t *testing.T, scanner *bufio.Scanner, c io.Writer) {
