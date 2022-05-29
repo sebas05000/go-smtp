@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emersion/go-sasl"
+	"github.com/sebas05000/go-sasl"
 )
 
 var errTCPAndLMTP = errors.New("smtp: cannot start LMTP server listening on a TCP socket")

@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emersion/go-sasl"
+	"github.com/sebas05000/go-sasl"
 )
 
 // Issue 17794: don't send a trailing space on AUTH command when there's no password.
