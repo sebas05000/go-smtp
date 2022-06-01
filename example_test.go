@@ -92,21 +92,21 @@ func ExampleSendMail() {
 // The Backend implements SMTP server methods.
 type Backend struct{}
 
-// NewSession is called after client greeting (EHLO, HELO).
-func (bkd *Backend) NewSession(c smtp.ConnectionState) (smtp.Session, error) {
+// Login handles a login command with username and password.
+func (bkd *Backend) Login(state *smtp.ConnectionState, username, password string) (smtp.Session, error) {
+	if username != "username" || password != "password" {
+		return nil, errors.New("Invalid username or password")
+	}
 	return &Session{}, nil
+}
+
+// AnonymousLogin requires clients to authenticate using SMTP AUTH before sending emails
+func (bkd *Backend) AnonymousLogin(state *smtp.ConnectionState) (smtp.Session, error) {
+	return nil, smtp.ErrAuthRequired
 }
 
 // A Session is returned after successful login.
 type Session struct{}
-
-// AuthPlain implements authentication using SASL PLAIN.
-func (s *Session) AuthPlain(username, password string) error {
-	if username != "username" || password != "password" {
-		return errors.New("Invalid username or password")
-	}
-	return nil
-}
 
 func (s *Session) Mail(from string, opts *smtp.MailOptions) error {
 	log.Println("Mail from:", from)
@@ -127,7 +127,13 @@ func (s *Session) Data(r io.Reader) error {
 	return nil
 }
 
-func (s *Session) Reset() {}
+func (s *Session) Reset() error {
+	return nil
+}
+
+func (s *Session) Noop() error {
+	return nil
+}
 
 func (s *Session) Logout() error {
 	return nil
