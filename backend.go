@@ -19,13 +19,7 @@ var (
 
 // A SMTP server backend.
 type Backend interface {
-	// Authenticate a user. Return smtp.ErrAuthUnsupported if you don't want to
-	// support this.
-	Login(state *ConnectionState, username, password string) (Session, error)
-
-	// Called if the client attempts to send mail without logging in first.
-	// Return smtp.ErrAuthRequired if you don't want to support this.
-	AnonymousLogin(state *ConnectionState) (Session, error)
+	NewSession(c ConnectionState) (Session, error)
 }
 
 type BodyType string
@@ -70,19 +64,20 @@ type MailOptions struct {
 // The methods are called when the remote client issues the matching command.
 type Session interface {
 	// Discard currently processed message.
-	Reset() error
-
-	// Check that the connection to the server is okay
-	Noop() error
+	Reset()
 
 	// Free all resources associated with session.
 	Logout() error
+
+	// Authenticate the user using SASL PLAIN.
+	AuthPlain(username, password string) error
 
 	// Set return path for currently processed message.
 	Mail(from string, opts *MailOptions) error
 	// Add recipient for currently processed message.
 	Rcpt(to string) error
 	// Set currently processed message contents and send it.
+	//
 	// r must be consumed before Data returns.
 	Data(r io.Reader) error
 }

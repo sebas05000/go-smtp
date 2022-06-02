@@ -99,11 +99,26 @@ func NewClient(conn net.Conn, host string) (*Client, error) {
 		SubmissionTimeout: 12 * time.Minute,
 	}
 
-	return c, c.InitConn(conn)
+	c.setConn(conn)
+
+	// Initial greeting timeout. RFC 5321 recommends 5 minutes.
+	c.conn.SetDeadline(time.Now().Add(5 * time.Minute))
+	defer c.conn.SetDeadline(time.Time{})
+
+	_, _, err := c.Text.ReadResponse(220)
+	if err != nil {
+		c.Text.Close()
+		if protoErr, ok := err.(*textproto.Error); ok {
+			return nil, toSMTPErr(protoErr)
+		}
+		return nil, err
+	}
+
+	return c, nil
 }
 
 // NewClientLMTP returns a new LMTP Client (as defined in RFC 2033) using an
-// existing connector and host as a server name to be used when authenticating.
+// existing connection and host as a server name to be used when authenticating.
 func NewClientLMTP(conn net.Conn, host string) (*Client, error) {
 	c, err := NewClient(conn, host)
 	if err != nil {
@@ -142,29 +157,6 @@ func (c *Client) setConn(conn net.Conn) {
 
 	_, isTLS := conn.(*tls.Conn)
 	c.tls = isTLS
-}
-
-func (c *Client) InitConn(conn net.Conn) error {
-	if c.conn != nil {
-		return errors.New("smtp: client connection is already initialized")
-	}
-
-	c.setConn(conn)
-
-	// Set initial greeting timeout.
-	c.conn.SetDeadline(time.Now().Add(c.CommandTimeout))
-	defer c.conn.SetDeadline(time.Time{})
-
-	_, _, err := c.Text.ReadResponse(220)
-	if err != nil {
-		c.Text.Close()
-		if protoErr, ok := err.(*textproto.Error); ok {
-			return toSMTPErr(protoErr)
-		}
-		return err
-	}
-
-	return nil
 }
 
 // Close closes the connection.

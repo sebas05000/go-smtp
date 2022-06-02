@@ -45,27 +45,7 @@ type backend struct {
 	userErr     error
 }
 
-func (be *backend) Login(_ *smtp.ConnectionState, username, password string) (smtp.Session, error) {
-	if be.userErr != nil {
-		return &session{}, be.userErr
-	}
-
-	if username != "username" || password != "password" {
-		return nil, errors.New("Invalid username or password")
-	}
-
-	if be.implementLMTPData {
-		return &lmtpSession{&session{backend: be}}, nil
-	}
-
-	return &session{backend: be}, nil
-}
-
-func (be *backend) AnonymousLogin(_ *smtp.ConnectionState) (smtp.Session, error) {
-	if be.userErr != nil {
-		return &session{}, be.userErr
-	}
-
+func (be *backend) NewSession(_ smtp.ConnectionState) (smtp.Session, error) {
 	if be.implementLMTPData {
 		return &lmtpSession{&session{backend: be, anonymous: true}}, nil
 	}
@@ -84,13 +64,16 @@ type session struct {
 	msg *message
 }
 
-func (s *session) Reset() error {
-	s.msg = &message{}
+func (s *session) AuthPlain(username, password string) error {
+	if username != "username" || password != "password" {
+		return errors.New("Invalid username or password")
+	}
+	s.anonymous = false
 	return nil
 }
 
-func (s *session) Noop() error {
-	return nil
+func (s *session) Reset() {
+	s.msg = &message{}
 }
 
 func (s *session) Logout() error {
@@ -301,7 +284,7 @@ func TestServerAcceptErrorHandling(t *testing.T) {
 	s := smtp.NewServer(be)
 	s.Domain = "localhost"
 	s.AllowInsecureAuth = true
-	s.ErrorLog = &smtp.DefaultLogger{log.New(errorLog, "", 0)}
+	s.ErrorLog = log.New(errorLog, "", 0)
 
 	l := newFailingListener()
 	var serveError error
@@ -443,7 +426,7 @@ func TestServerPanicRecover(t *testing.T) {
 
 	s.Backend.(*backend).panicOnMail = true
 	// Don't log panic in tests to not confuse people who run 'go test'.
-	s.ErrorLog = &smtp.DefaultLogger{log.New(ioutil.Discard, "", 0)}
+	s.ErrorLog = log.New(ioutil.Discard, "", 0)
 
 	io.WriteString(c, "MAIL FROM:<alice@wonderland.book>\r\n")
 	scanner.Scan()

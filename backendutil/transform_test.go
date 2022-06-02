@@ -29,22 +29,7 @@ type backend struct {
 	userErr error
 }
 
-func (be *backend) Login(_ *smtp.ConnectionState, username, password string) (smtp.Session, error) {
-	if be.userErr != nil {
-		return &session{}, be.userErr
-	}
-
-	if username != "username" || password != "password" {
-		return nil, errors.New("Invalid username or password")
-	}
-	return &session{backend: be}, nil
-}
-
-func (be *backend) AnonymousLogin(_ *smtp.ConnectionState) (smtp.Session, error) {
-	if be.userErr != nil {
-		return &session{}, be.userErr
-	}
-
+func (be *backend) NewSession(c smtp.ConnectionState) (smtp.Session, error) {
 	return &session{backend: be, anonymous: true}, nil
 }
 
@@ -55,16 +40,19 @@ type session struct {
 	msg *message
 }
 
-func (s *session) Reset() error {
+func (s *session) Reset() {
 	s.msg = &message{}
-	return nil
-}
-
-func (s *session) Noop() error {
-	return nil
 }
 
 func (s *session) Logout() error {
+	return nil
+}
+
+func (s *session) AuthPlain(username, password string) error {
+	if username != "username" || password != "password" {
+		return errors.New("Invalid username or password")
+	}
+	s.anonymous = false
 	return nil
 }
 

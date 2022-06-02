@@ -23,8 +23,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/sebas05000/go-sasl"
-	"github.com/sebas05000/go-smtp"
+	"github.com/emersion/go-sasl"
+	"github.com/emersion/go-smtp"
 )
 
 func main() {

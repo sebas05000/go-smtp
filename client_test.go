@@ -135,6 +135,7 @@ func TestBasic(t *testing.T) {
 	msg := `From: user@gmail.com
 To: golang-nuts@googlegroups.com
 Subject: Hooray for Go
+
 Line 1
 .Leading dot line .
 Goodbye.`
@@ -314,6 +315,7 @@ DATA
 From: user@gmail.com
 To: golang-nuts@googlegroups.com
 Subject: Hooray for Go
+
 Line 1
 ..Leading dot line .
 Goodbye.
@@ -537,6 +539,7 @@ DATA
 From: test@example.com
 To: other@example.com
 Subject: SendMail test
+
 SendMail is working for me.
 .
 QUIT
@@ -799,6 +802,7 @@ func TestLMTP(t *testing.T) {
 	msg := `From: user@gmail.com
 To: golang-nuts@googlegroups.com
 Subject: Hooray for Go
+
 Line 1
 .Leading dot line .
 Goodbye.`
@@ -841,6 +845,7 @@ DATA
 From: user@gmail.com
 To: golang-nuts@googlegroups.com
 Subject: Hooray for Go
+
 Line 1
 ..Leading dot line .
 Goodbye.
@@ -885,6 +890,7 @@ func TestLMTPData(t *testing.T) {
 	msg := `From: user@gmail.com
 To: golang-nuts@googlegroups.com
 Subject: Hooray for Go
+
 Line 1
 .Leading dot line .
 Goodbye.`

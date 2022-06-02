@@ -3,13 +3,11 @@ package smtp
 import (
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/sebas05000/go-sasl"
@@ -22,20 +20,8 @@ type SaslServerFactory func(conn *Conn) sasl.Server
 
 // Logger interface is used by Server to report unexpected internal errors.
 type Logger interface {
-	Printf(c *Conn, format string, v ...interface{})
-	Println(c *Conn, v ...interface{})
-}
-
-type DefaultLogger struct {
-	*log.Logger
-}
-
-func (l *DefaultLogger) Printf(_ *Conn, format string, v ...interface{}) {
-	l.Logger.Println(fmt.Errorf(format, v...))
-}
-
-func (l *DefaultLogger) Println(_ *Conn, v ...interface{}) {
-	l.Logger.Println(v...)
+	Printf(format string, v ...interface{})
+	Println(v ...interface{})
 }
 
 // A SMTP server.
@@ -95,7 +81,7 @@ func NewServer(be Backend) *Server {
 
 		Backend:  be,
 		done:     make(chan struct{}, 1),
-		ErrorLog: &DefaultLogger{log.New(os.Stderr, "smtp/server ", log.LstdFlags)},
+		ErrorLog: log.New(os.Stderr, "smtp/server ", log.LstdFlags),
 		caps:     []string{"PIPELINING", "8BITMIME", "ENHANCEDSTATUSCODES", "CHUNKING"},
 		auths: map[string]SaslServerFactory{
 			sasl.Plain: func(conn *Conn) sasl.Server {
@@ -104,14 +90,12 @@ func NewServer(be Backend) *Server {
 						return errors.New("Identities not supported")
 					}
 
-					state := conn.State()
-					session, err := be.Login(&state, username, password)
-					if err != nil {
-						return err
+					sess := conn.Session()
+					if sess == nil {
+						panic("No session when AUTH is called")
 					}
 
-					conn.SetSession(session)
-					return nil
+					return sess.AuthPlain(username, password)
 				})
 			},
 		},
@@ -145,17 +129,16 @@ func (s *Server) Serve(l net.Listener) error {
 				if max := 1 * time.Second; tempDelay > max {
 					tempDelay = max
 				}
-				s.ErrorLog.Printf(nil, "accept error: %w; retrying in %s", err, tempDelay)
+				s.ErrorLog.Printf("accept error: %s; retrying in %s", err, tempDelay)
 				time.Sleep(tempDelay)
 				continue
 			}
 			return err
 		}
 		go func() {
-			conn := newConn(c, s)
-			err := s.handleConn(conn)
+			err := s.handleConn(newConn(c, s))
 			if err != nil {
-				s.ErrorLog.Printf(conn, "handler error: %w", err)
+				s.ErrorLog.Printf("handler error: %s", err)
 			}
 		}()
 	}
@@ -182,14 +165,6 @@ func (s *Server) handleConn(c *Conn) error {
 			c.conn.SetWriteDeadline(time.Now().Add(d))
 		}
 		if err := tlsConn.Handshake(); err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			if err, ok := err.(*net.OpError); ok {
-				// preserve remote address from PROXY protocol
-				err.Addr = c.conn.RemoteAddr()
-			}
-			s.ErrorLog.Printf(c, "TLS handshake error: %w", err)
 			return err
 		}
 	}
@@ -201,9 +176,7 @@ func (s *Server) handleConn(c *Conn) error {
 		if err == nil {
 			cmd, arg, err := parseCmd(line)
 			if err != nil {
-				msg := "Bad command"
-				s.ErrorLog.Printf(c, "%s: %w", msg, err)
-				c.protocolError(501, EnhancedCode{5, 5, 2}, msg)
+				c.protocolError(501, EnhancedCode{5, 5, 2}, "Bad command")
 				continue
 			}
 
@@ -212,36 +185,17 @@ func (s *Server) handleConn(c *Conn) error {
 			if err == io.EOF {
 				return nil
 			}
-
 			if err == ErrTooLongLine {
-				msg := "Too long line, closing connection"
-				s.ErrorLog.Printf(c, "%s: %w", msg, err)
-				c.WriteResponse(500, EnhancedCode{5, 4, 0}, msg)
+				c.WriteResponse(500, EnhancedCode{5, 4, 0}, "Too long line, closing connection")
 				return nil
-			}
-
-			if err, ok := err.(*net.OpError); ok {
-				if err.Err == net.ErrClosed {
-					return nil
-				}
-				if errors.Is(err, syscall.ECONNRESET) && c.Session() == nil {
-					// healthcheck monitor
-					return nil
-				}
-				// preserve remote address from PROXY protocol
-				err.Addr = c.conn.RemoteAddr()
 			}
 
 			if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
-				msg := "Idle timeout, bye bye"
-				s.ErrorLog.Printf(c, "%s: %w", msg, err)
-				c.WriteResponse(221, EnhancedCode{2, 4, 2}, msg)
+				c.WriteResponse(221, EnhancedCode{2, 4, 2}, "Idle timeout, bye bye")
 				return nil
 			}
 
-			msg := "Connection error, sorry"
-			s.ErrorLog.Printf(c, "%s: %w", msg, err)
-			c.WriteResponse(221, EnhancedCode{2, 4, 0}, msg)
+			c.WriteResponse(221, EnhancedCode{2, 4, 0}, "Connection error, sorry")
 			return err
 		}
 	}
