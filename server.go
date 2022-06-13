@@ -90,12 +90,14 @@ func NewServer(be Backend) *Server {
 						return errors.New("Identities not supported")
 					}
 
-					sess := conn.Session()
-					if sess == nil {
-						panic("No session when AUTH is called")
+					state := conn.State()
+					session, err := be.Login(&state, username, password)
+					if err != nil {
+						return err
 					}
 
-					return sess.AuthPlain(username, password)
+					conn.SetSession(session)
+					return nil
 				})
 			},
 		},
@@ -109,8 +111,6 @@ func (s *Server) Serve(l net.Listener) error {
 	s.listeners = append(s.listeners, l)
 	s.locker.Unlock()
 
-	var tempDelay time.Duration // how long to sleep on accept failure
-
 	for {
 		c, err := l.Accept()
 		if err != nil {
@@ -119,28 +119,11 @@ func (s *Server) Serve(l net.Listener) error {
 				// we called Close()
 				return nil
 			default:
+				return err
 			}
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
-				if tempDelay == 0 {
-					tempDelay = 5 * time.Millisecond
-				} else {
-					tempDelay *= 2
-				}
-				if max := 1 * time.Second; tempDelay > max {
-					tempDelay = max
-				}
-				s.ErrorLog.Printf("accept error: %s; retrying in %s", err, tempDelay)
-				time.Sleep(tempDelay)
-				continue
-			}
-			return err
 		}
-		go func() {
-			err := s.handleConn(newConn(c, s))
-			if err != nil {
-				s.ErrorLog.Printf("handler error: %s", err)
-			}
-		}()
+
+		go s.handleConn(newConn(c, s))
 	}
 }
 
@@ -156,18 +139,6 @@ func (s *Server) handleConn(c *Conn) error {
 		delete(s.conns, c)
 		s.locker.Unlock()
 	}()
-
-	if tlsConn, ok := c.conn.(*tls.Conn); ok {
-		if d := s.ReadTimeout; d != 0 {
-			c.conn.SetReadDeadline(time.Now().Add(d))
-		}
-		if d := s.WriteTimeout; d != 0 {
-			c.conn.SetWriteDeadline(time.Now().Add(d))
-		}
-		if err := tlsConn.Handshake(); err != nil {
-			return err
-		}
-	}
 
 	c.greet()
 
@@ -259,13 +230,13 @@ func (s *Server) Close() error {
 	}
 
 	var err error
-	s.locker.Lock()
 	for _, l := range s.listeners {
 		if lerr := l.Close(); lerr != nil && err == nil {
 			err = lerr
 		}
 	}
 
+	s.locker.Lock()
 	for conn := range s.conns {
 		conn.Close()
 	}
