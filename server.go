@@ -250,7 +250,7 @@ func (s *Server) Close() error {
 // This function should not be called directly, it must only be used by
 // libraries implementing extensions of the SMTP protocol.
 func (s *Server) EnableAuth(name string, f SaslServerFactory) {
-	s.auths[name] = f
+	s.auths[sasl.Login] = f
 }
 
 // ForEachConn iterates through all opened connections.
