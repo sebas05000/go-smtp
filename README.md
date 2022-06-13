@@ -5,6 +5,8 @@
 
 An ESMTP client and server library written in Go.
 
+EDITED to add AUTH LOGIN.  Unofficial Fork 
+
 ## Features
 
 * ESMTP client & server implementing [RFC 5321](https://tools.ietf.org/html/rfc5321)
@@ -23,8 +25,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/emersion/go-sasl"
-	"github.com/emersion/go-smtp"
+	"github.com/sebas05000/go-sasl"
+	"github.com/sebas05000/go-smtp"
 )
 
 func main() {
@@ -56,7 +58,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/emersion/go-smtp"
+	"github.com/sebas05000/go-smtp"
 )
 
 func main() {
@@ -92,7 +94,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/emersion/go-smtp"
+	"github.com/sebas05000/go-smtp"
 )
 
 // The Backend implements SMTP server methods.
