@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sebas0500/go-sasl"
-	"github.com/sebas0500/go-smtp"
+	"github.com/sebas05000/go-sasl"
+	"github.com/sebas05000/go-smtp"
 )
 
 func ExampleDial() {
