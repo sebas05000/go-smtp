@@ -100,6 +100,17 @@ func NewServer(be Backend) *Server {
 					return nil
 				})
 			},
+			sasl.Login: func(conn *Conn) sasl.Server {
+				return sasl.NewLoginServer(func(username, password string) error {
+					state := conn.State()
+					session, err := be.Login(&state, username, password)
+					if err != nil {
+						return err
+					}
+					conn.SetSession(session)
+					return nil
+				})
+			},
 		},
 		conns: make(map[*Conn]struct{}),
 	}
@@ -250,7 +261,7 @@ func (s *Server) Close() error {
 // This function should not be called directly, it must only be used by
 // libraries implementing extensions of the SMTP protocol.
 func (s *Server) EnableAuth(name string, f SaslServerFactory) {
-	s.auths[sasl.Login] = f
+	s.auths[name] = f
 }
 
 // ForEachConn iterates through all opened connections.
