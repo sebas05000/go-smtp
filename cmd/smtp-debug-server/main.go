@@ -17,17 +17,21 @@ func init() {
 
 type backend struct{}
 
-func (bkd *backend) Login(state *smtp.ConnectionState, username, password string) (smtp.Session, error) {
-	return &session{}, nil
-}
-
-func (bkd *backend) AnonymousLogin(state *smtp.ConnectionState) (smtp.Session, error) {
+func (bkd *backend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 	return &session{}, nil
 }
 
 type session struct{}
 
-func (s *session) Mail(from string, opts smtp.MailOptions) error {
+func (s *session) AuthPlain(username, password string) error {
+	return nil
+}
+
+func (s *session) AuthLogin(username, password string) error {
+	return nil
+}
+
+func (s *session) Mail(from string, opts *smtp.MailOptions) error {
 	return nil
 }
 

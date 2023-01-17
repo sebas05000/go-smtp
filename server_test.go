@@ -2,6 +2,7 @@ package smtp_test
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -17,7 +18,7 @@ type message struct {
 	From string
 	To   []string
 	Data []byte
-	Opts smtp.MailOptions
+	Opts *smtp.MailOptions
 }
 
 type backend struct {
@@ -44,27 +45,7 @@ type backend struct {
 	userErr     error
 }
 
-func (be *backend) Login(_ *smtp.ConnectionState, username, password string) (smtp.Session, error) {
-	if be.userErr != nil {
-		return &session{}, be.userErr
-	}
-
-	if username != "username" || password != "password" {
-		return nil, errors.New("Invalid username or password")
-	}
-
-	if be.implementLMTPData {
-		return &lmtpSession{&session{backend: be}}, nil
-	}
-
-	return &session{backend: be}, nil
-}
-
-func (be *backend) AnonymousLogin(_ *smtp.ConnectionState) (smtp.Session, error) {
-	if be.userErr != nil {
-		return &session{}, be.userErr
-	}
-
+func (be *backend) NewSession(_ *smtp.Conn) (smtp.Session, error) {
 	if be.implementLMTPData {
 		return &lmtpSession{&session{backend: be, anonymous: true}}, nil
 	}
@@ -83,6 +64,22 @@ type session struct {
 	msg *message
 }
 
+func (s *session) AuthPlain(username, password string) error {
+	if username != "username" || password != "password" {
+		return errors.New("Invalid username or password")
+	}
+	s.anonymous = false
+	return nil
+}
+
+func (s *session) AuthLogin(username, password string) error {
+	if username != "username" || password != "password" {
+		return errors.New("Invalid username or password")
+	}
+	s.anonymous = false
+	return nil
+}
+
 func (s *session) Reset() {
 	s.msg = &message{}
 }
@@ -91,7 +88,10 @@ func (s *session) Logout() error {
 	return nil
 }
 
-func (s *session) Mail(from string, opts smtp.MailOptions) error {
+func (s *session) Mail(from string, opts *smtp.MailOptions) error {
+	if s.backend.userErr != nil {
+		return s.backend.userErr
+	}
 	if s.backend.panicOnMail {
 		panic("Everything is on fire!")
 	}
@@ -154,6 +154,57 @@ func (s *session) LMTPData(r io.Reader, collector smtp.StatusCollector) error {
 
 	return nil
 }
+
+type failingListener struct {
+	c      chan error
+	closed bool
+}
+
+func newFailingListener() *failingListener {
+	return &failingListener{c: make(chan error)}
+}
+
+func (l *failingListener) Send(err error) {
+	if !l.closed {
+		l.c <- err
+	}
+}
+
+func (l *failingListener) Accept() (net.Conn, error) {
+	return nil, <-l.c
+}
+
+func (l *failingListener) Close() error {
+	if !l.closed {
+		close(l.c)
+		l.closed = true
+	}
+	return nil
+}
+
+func (l *failingListener) Addr() net.Addr {
+	return &net.TCPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: 12345,
+	}
+}
+
+type mockError struct {
+	msg       string
+	temporary bool
+}
+
+func newMockError(msg string, temporary bool) *mockError {
+	return &mockError{
+		msg:       msg,
+		temporary: temporary,
+	}
+}
+
+func (m *mockError) Error() string   { return m.msg }
+func (m *mockError) String() string  { return m.msg }
+func (m *mockError) Timeout() bool   { return false }
+func (m *mockError) Temporary() bool { return m.temporary }
 
 type serverConfigureFunc func(*smtp.Server)
 
@@ -235,6 +286,37 @@ func testServerEhlo(t *testing.T, fn ...serverConfigureFunc) (be *backend, s *sm
 	return
 }
 
+func TestServerAcceptErrorHandling(t *testing.T) {
+	errorLog := bytes.NewBuffer(nil)
+	be := new(backend)
+	s := smtp.NewServer(be)
+	s.Domain = "localhost"
+	s.AllowInsecureAuth = true
+	s.ErrorLog = log.New(errorLog, "", 0)
+
+	l := newFailingListener()
+	var serveError error
+	go func() {
+		serveError = s.Serve(l)
+		l.Close()
+	}()
+
+	temporaryError := newMockError("temporary mock error", true)
+	l.Send(temporaryError)
+	permanentError := newMockError("permanent mock error", false)
+	l.Send(permanentError)
+	s.Close()
+
+	if serveError == nil {
+		t.Fatal("Serve had exited without an expected error")
+	} else if serveError != permanentError {
+		t.Fatal("Unexpected error:", serveError)
+	}
+	if !strings.Contains(errorLog.String(), temporaryError.String()) {
+		t.Fatal("Missing temporary error in log output:", errorLog.String())
+	}
+}
+
 func TestServer_helo(t *testing.T) {
 	_, s, c, scanner := testServerGreeted(t)
 	defer s.Close()
@@ -267,6 +349,38 @@ func testServerAuthenticated(t *testing.T) (be *backend, s *smtp.Server, c net.C
 	}
 
 	return
+}
+
+func TestServerAuthTwice(t *testing.T) {
+	_, _, c, scanner, caps := testServerEhlo(t)
+
+	if _, ok := caps["AUTH PLAIN"]; !ok {
+		t.Fatal("AUTH PLAIN capability is missing when auth is enabled")
+	}
+
+	io.WriteString(c, "AUTH PLAIN AHVzZXJuYW1lAHBhc3N3b3Jk\r\n")
+	scanner.Scan()
+	if !strings.HasPrefix(scanner.Text(), "235 ") {
+		t.Fatal("Invalid AUTH response:", scanner.Text())
+	}
+
+	io.WriteString(c, "AUTH PLAIN AHVzZXJuYW1lAHBhc3N3b3Jk\r\n")
+	scanner.Scan()
+	if !strings.HasPrefix(scanner.Text(), "503 ") {
+		t.Fatal("Invalid AUTH response:", scanner.Text())
+	}
+
+	io.WriteString(c, "RSET\r\n")
+	scanner.Scan()
+	if !strings.HasPrefix(scanner.Text(), "250 ") {
+		t.Fatal("Invalid AUTH response:", scanner.Text())
+	}
+
+	io.WriteString(c, "AUTH PLAIN AHVzZXJuYW1lAHBhc3N3b3Jk\r\n")
+	scanner.Scan()
+	if !strings.HasPrefix(scanner.Text(), "503 ") {
+		t.Fatal("Invalid AUTH response:", scanner.Text())
+	}
 }
 
 func TestServerCancelSASL(t *testing.T) {
