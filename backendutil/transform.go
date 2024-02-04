@@ -3,7 +3,7 @@ package backendutil
 import (
 	"io"
 
-	"github.com/sebas05000/go-smtp"
+	"github.com/emersion/go-smtp"
 )
 
 // TransformBackend is a backend that transforms messages.
@@ -37,10 +37,6 @@ func (s *transformSession) AuthPlain(username, password string) error {
 	return s.Session.AuthPlain(username, password)
 }
 
-func (s *transformSession) AuthLogin(username, password string) error {
-	return s.Session.AuthLogin(username, password)
-}
-
 func (s *transformSession) Mail(from string, opts *smtp.MailOptions) error {
 	if s.be.TransformMail != nil {
 		var err error
@@ -52,7 +48,7 @@ func (s *transformSession) Mail(from string, opts *smtp.MailOptions) error {
 	return s.Session.Mail(from, opts)
 }
 
-func (s *transformSession) Rcpt(to string) error {
+func (s *transformSession) Rcpt(to string, opts *smtp.RcptOptions) error {
 	if s.be.TransformRcpt != nil {
 		var err error
 		to, err = s.be.TransformRcpt(to)
@@ -60,7 +56,7 @@ func (s *transformSession) Rcpt(to string) error {
 			return err
 		}
 	}
-	return s.Session.Rcpt(to)
+	return s.Session.Rcpt(to, opts)
 }
 
 func (s *transformSession) Data(r io.Reader) error {

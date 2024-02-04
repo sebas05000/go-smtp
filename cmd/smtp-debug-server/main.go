@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/sebas05000/go-smtp"
+	"github.com/emersion/go-smtp"
 )
 
 var addr = "127.0.0.1:1025"
@@ -27,15 +27,11 @@ func (s *session) AuthPlain(username, password string) error {
 	return nil
 }
 
-func (s *session) AuthLogin(username, password string) error {
-	return nil
-}
-
 func (s *session) Mail(from string, opts *smtp.MailOptions) error {
 	return nil
 }
 
-func (s *session) Rcpt(to string) error {
+func (s *session) Rcpt(to string, opts *smtp.RcptOptions) error {
 	return nil
 }
 
