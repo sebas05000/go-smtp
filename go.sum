@@ -1,2 +1,2 @@
-github.com/emersion/go-sasl v0.0.0-20200509203442-7bfe0ed36a21 h1:OJyUGMJTzHTd1XQp98QTaHernxMYzRaOasRir9hUlFQ=
-github.com/emersion/go-sasl v0.0.0-20200509203442-7bfe0ed36a21/go.mod h1:iL2twTeMvZnrg54ZoPDNfJaJaqy0xIQFuBdrLsmspwQ=
+github.com/sebas05000/go-sasl v1.0.2 h1:n+q8pQWCv73AVCsv0bMEZZxAqzGvufs2648WzQ7w0Fg=
+github.com/sebas05000/go-sasl v1.0.2/go.mod h1:iodGM25WxPpaiC+c3e1sUuTk+cq7Phbx3Lr6YqhEBoc=

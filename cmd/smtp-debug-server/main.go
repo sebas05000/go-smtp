@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/emersion/go-smtp"
+	"github.com/sebas05000/go-smtp"
 )
 
 var addr = "127.0.0.1:1025"
@@ -24,6 +24,10 @@ func (bkd *backend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 type session struct{}
 
 func (s *session) AuthPlain(username, password string) error {
+	return nil
+}
+
+func (s *session) AuthLogin(username, password string) error {
 	return nil
 }
 

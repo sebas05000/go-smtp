@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emersion/go-smtp"
+	"github.com/sebas05000/go-smtp"
 )
 
 type message struct {
@@ -67,6 +67,14 @@ type session struct {
 }
 
 func (s *session) AuthPlain(username, password string) error {
+	if username != "username" || password != "password" {
+		return errors.New("Invalid username or password")
+	}
+	s.anonymous = false
+	return nil
+}
+
+func (s *session) AuthLogin(username, password string) error {
 	if username != "username" || password != "password" {
 		return errors.New("Invalid username or password")
 	}

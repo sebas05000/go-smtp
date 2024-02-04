@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emersion/go-sasl"
+	"github.com/sebas05000/go-sasl"
 )
 
 var (
@@ -107,7 +107,19 @@ func NewServer(be Backend) *Server {
 					return sess.AuthPlain(username, password)
 				})
 			},
+			// Add deprecated LOGIN auth method as some clients haven't learned
+			sasl.Login: func(conn *Conn) sasl.Server {
+				return sasl.NewLoginServer(func(username, password string) error {
+					sess := conn.Session()
+					if sess == nil {
+						panic("No session when AUTH is called")
+					}
+
+					return sess.AuthLogin(username, password)
+				})
+			},
 		},
+
 		conns: make(map[*Conn]struct{}),
 	}
 }

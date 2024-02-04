@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/emersion/go-smtp"
+	"github.com/sebas05000/go-smtp"
 )
 
 // The Backend implements SMTP server methods.
@@ -23,6 +23,14 @@ type Session struct{}
 
 // AuthPlain implements authentication using SASL PLAIN.
 func (s *Session) AuthPlain(username, password string) error {
+	if username != "username" || password != "password" {
+		return errors.New("Invalid username or password")
+	}
+	return nil
+}
+
+// AuthPlain implements authentication using SASL LOGIN.
+func (s *Session) AuthLogin(username, password string) error {
 	if username != "username" || password != "password" {
 		return errors.New("Invalid username or password")
 	}

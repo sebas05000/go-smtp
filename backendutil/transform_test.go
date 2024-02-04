@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emersion/go-smtp"
-	"github.com/emersion/go-smtp/backendutil"
+	"github.com/sebas05000/go-smtp"
+	"github.com/sebas05000/go-smtp/backendutil"
 )
 
 var _ smtp.Backend = &backendutil.TransformBackend{}
@@ -49,6 +49,14 @@ func (s *session) Logout() error {
 }
 
 func (s *session) AuthPlain(username, password string) error {
+	if username != "username" || password != "password" {
+		return errors.New("Invalid username or password")
+	}
+	s.anonymous = false
+	return nil
+}
+
+func (s *session) AuthLogin(username, password string) error {
 	if username != "username" || password != "password" {
 		return errors.New("Invalid username or password")
 	}

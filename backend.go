@@ -40,6 +40,9 @@ type Session interface {
 	// Authenticate the user using SASL PLAIN.
 	AuthPlain(username, password string) error
 
+	// Authenticate the user using SASL LOGIN.
+	AuthLogin(username, password string) error
+
 	// Set return path for currently processed message.
 	Mail(from string, opts *MailOptions) error
 	// Add recipient for currently processed message.
