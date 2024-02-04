@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebas05000/go-sasl"
+	"github.com/emersion/go-sasl"
 )
 
 // Issue 17794: don't send a trailing space on AUTH command when there's no password.
@@ -33,11 +33,7 @@ func TestClientAuthTrimSpace(t *testing.T) {
 		strings.NewReader(server),
 		&wrote,
 	}
-	c, err := NewClient(fake, "fake.host")
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-	c.tls = true
+	c := NewClient(fake)
 	c.didHello = true
 	c.Auth(toServerEmptyAuth{})
 	c.Close()
@@ -79,7 +75,7 @@ func TestBasic(t *testing.T) {
 	bcmdbuf := bufio.NewWriter(&cmdbuf)
 	var fake faker
 	fake.ReadWriter = bufio.NewReadWriter(bufio.NewReader(strings.NewReader(server)), bcmdbuf)
-	c := &Client{Text: textproto.NewConn(fake), conn: fake, localName: "localhost"}
+	c := &Client{text: textproto.NewConn(fake), conn: fake, localName: "localhost"}
 
 	if err := c.helo(); err != nil {
 		t.Fatalf("HELO failed: %s", err)
@@ -113,14 +109,12 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("Second VRFY: expected verification, got %s", err)
 	}
 
-	// fake TLS so authentication won't complain
-	c.tls = true
 	c.serverName = "smtp.google.com"
 	if err := c.Auth(sasl.NewPlainClient("", "user", "pass")); err != nil {
 		t.Fatalf("AUTH failed: %s", err)
 	}
 
-	if err := c.Rcpt("golang-nuts@googlegroups.com>\r\nDATA\r\nInjected message body\r\n.\r\nQUIT\r\n"); err == nil {
+	if err := c.Rcpt("golang-nuts@googlegroups.com>\r\nDATA\r\nInjected message body\r\n.\r\nQUIT\r\n", nil); err == nil {
 		t.Fatalf("RCPT should have failed due to a message injection attempt")
 	}
 	if err := c.Mail("user@gmail.com>\r\nDATA\r\nAnother injected message body\r\n.\r\nQUIT\r\n", nil); err == nil {
@@ -129,7 +123,7 @@ func TestBasic(t *testing.T) {
 	if err := c.Mail("user@gmail.com", nil); err != nil {
 		t.Fatalf("MAIL failed: %s", err)
 	}
-	if err := c.Rcpt("golang-nuts@googlegroups.com"); err != nil {
+	if err := c.Rcpt("golang-nuts@googlegroups.com", nil); err != nil {
 		t.Fatalf("RCPT failed: %s", err)
 	}
 	msg := `From: user@gmail.com
@@ -185,14 +179,11 @@ func TestBasic_SMTPError(t *testing.T) {
 		strings.NewReader(faultyServer),
 		&wrote,
 	}
-	c, err := NewClient(fake, "fake.host")
-	if err != nil {
-		t.Fatalf("NewClient failed: %v", err)
-	}
+	c := NewClient(fake)
 
-	err = c.Mail("whatever", nil)
+	err := c.Mail("whatever", nil)
 	if err == nil {
-		t.Fatal("MAIL succeded")
+		t.Fatal("MAIL succeeded")
 	}
 	smtpErr, ok := err.(*SMTPError)
 	if !ok {
@@ -210,7 +201,7 @@ func TestBasic_SMTPError(t *testing.T) {
 
 	err = c.Mail("whatever", nil)
 	if err == nil {
-		t.Fatal("MAIL succeded")
+		t.Fatal("MAIL succeeded")
 	}
 	smtpErr, ok = err.(*SMTPError)
 	if !ok {
@@ -225,7 +216,7 @@ func TestBasic_SMTPError(t *testing.T) {
 
 	err = c.Mail("whatever", nil)
 	if err == nil {
-		t.Fatal("MAIL succeded")
+		t.Fatal("MAIL succeeded")
 	}
 	smtpErr, ok = err.(*SMTPError)
 	if !ok {
@@ -267,21 +258,18 @@ func TestClient_TooLongLine(t *testing.T) {
 		pr,
 		&wrote,
 	}
-	c, err := NewClient(fake, "fake.host")
-	if err != nil {
-		t.Fatalf("NewClient failed: %v", err)
-	}
+	c := NewClient(fake)
 
-	err = c.Mail("whatever", nil)
+	err := c.Mail("whatever", nil)
 	if err != ErrTooLongLine {
-		t.Fatal("MAIL succeded or returned a different error:", err)
+		t.Fatal("MAIL succeeded or returned a different error:", err)
 	}
 
 	// ErrTooLongLine is "sticky" since the connection is in broken state and
 	// the only reasonable way to recover is to close it.
 	err = c.Mail("whatever", nil)
 	if err != ErrTooLongLine {
-		t.Fatal("Second MAIL succeded or returned a different error:", err)
+		t.Fatal("Second MAIL succeeded or returned a different error:", err)
 	}
 }
 
@@ -335,10 +323,7 @@ func TestNewClient(t *testing.T) {
 	}
 	var fake faker
 	fake.ReadWriter = bufio.NewReadWriter(bufio.NewReader(strings.NewReader(server)), bcmdbuf)
-	c, err := NewClient(fake, "fake.host")
-	if err != nil {
-		t.Fatalf("NewClient: %v\n(after %v)", err, out())
-	}
+	c := NewClient(fake)
 	defer c.Close()
 	if ok, args := c.Extension("aUtH"); !ok || args != "LOGIN PLAIN" {
 		t.Fatalf("Expected AUTH supported")
@@ -376,10 +361,7 @@ func TestNewClient2(t *testing.T) {
 	bcmdbuf := bufio.NewWriter(&cmdbuf)
 	var fake faker
 	fake.ReadWriter = bufio.NewReadWriter(bufio.NewReader(strings.NewReader(server)), bcmdbuf)
-	c, err := NewClient(fake, "fake.host")
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
+	c := NewClient(fake)
 	defer c.Close()
 	if ok, _ := c.Extension("DSN"); ok {
 		t.Fatalf("Shouldn't support DSN")
@@ -422,14 +404,12 @@ func TestHello(t *testing.T) {
 		bcmdbuf := bufio.NewWriter(&cmdbuf)
 		var fake faker
 		fake.ReadWriter = bufio.NewReadWriter(bufio.NewReader(strings.NewReader(server)), bcmdbuf)
-		c, err := NewClient(fake, "fake.host")
-		if err != nil {
-			t.Fatalf("NewClient: %v", err)
-		}
+		c := NewClient(fake)
 		defer c.Close()
+		c.serverName = "fake.host"
 		c.localName = "customhost"
-		err = nil
 
+		var err error
 		switch i {
 		case 0:
 			err = c.Hello("hostinjection>\n\rDATA\r\nInjected message body\r\n.\r\nQUIT\r\n")
@@ -439,13 +419,12 @@ func TestHello(t *testing.T) {
 			err = c.Hello("customhost")
 		case 1:
 			err = c.StartTLS(nil)
-			if err.Error() == "Not implemented" {
+			if err.Error() == "SMTP error 502: Not implemented" {
 				err = nil
 			}
 		case 2:
 			err = c.Verify("test@example.com")
 		case 3:
-			c.tls = true
 			c.serverName = "smtp.google.com"
 			err = c.Auth(sasl.NewPlainClient("", "user", "pass"))
 		case 4:
@@ -552,19 +531,15 @@ func TestAuthFailed(t *testing.T) {
 	bcmdbuf := bufio.NewWriter(&cmdbuf)
 	var fake faker
 	fake.ReadWriter = bufio.NewReadWriter(bufio.NewReader(strings.NewReader(server)), bcmdbuf)
-	c, err := NewClient(fake, "fake.host")
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
+	c := NewClient(fake)
 	defer c.Close()
 
-	c.tls = true
 	c.serverName = "smtp.google.com"
-	err = c.Auth(sasl.NewPlainClient("", "user", "pass"))
+	err := c.Auth(sasl.NewPlainClient("", "user", "pass"))
 
 	if err == nil {
 		t.Error("Auth: expected error; got none")
-	} else if err.Error() != "Invalid credentials\nplease see www.example.com" {
+	} else if err.Error() != "SMTP error 535: Invalid credentials\nplease see www.example.com" {
 		t.Errorf("Auth: got error: %v, want: %s", err, "Invalid credentials\nplease see www.example.com")
 	}
 
@@ -787,7 +762,7 @@ func TestLMTP(t *testing.T) {
 	bcmdbuf := bufio.NewWriter(&cmdbuf)
 	var fake faker
 	fake.ReadWriter = bufio.NewReadWriter(bufio.NewReader(strings.NewReader(server)), bcmdbuf)
-	c := &Client{Text: textproto.NewConn(fake), conn: fake, lmtp: true}
+	c := &Client{text: textproto.NewConn(fake), conn: fake, lmtp: true}
 
 	if err := c.Hello("localhost"); err != nil {
 		t.Fatalf("LHLO failed: %s", err)
@@ -797,7 +772,7 @@ func TestLMTP(t *testing.T) {
 	if err := c.Mail("user@gmail.com", nil); err != nil {
 		t.Fatalf("MAIL failed: %s", err)
 	}
-	if err := c.Rcpt("golang-nuts@googlegroups.com"); err != nil {
+	if err := c.Rcpt("golang-nuts@googlegroups.com", nil); err != nil {
 		t.Fatalf("RCPT failed: %s", err)
 	}
 	msg := `From: user@gmail.com
@@ -829,7 +804,8 @@ Goodbye.`
 	}
 }
 
-var lmtpServer = `250-localhost at your service
+var lmtpServer = `220 localhost Simple Mail Transfer Service Ready
+250-localhost at your service
 250-SIZE 35651584
 250 8BITMIME
 250 Sender OK
@@ -855,7 +831,8 @@ QUIT
 `
 
 func TestLMTPData(t *testing.T) {
-	var lmtpServerPartial = `250-localhost at your service
+	var lmtpServerPartial = `220 localhost Simple Mail Transfer Service Ready
+250-localhost at your service
 250-SIZE 35651584
 250 8BITMIME
 250 Sender OK
@@ -872,7 +849,7 @@ func TestLMTPData(t *testing.T) {
 	bcmdbuf := bufio.NewWriter(&cmdbuf)
 	var fake faker
 	fake.ReadWriter = bufio.NewReadWriter(bufio.NewReader(strings.NewReader(server)), bcmdbuf)
-	c := &Client{Text: textproto.NewConn(fake), conn: fake, lmtp: true}
+	c := &Client{text: textproto.NewConn(fake), conn: fake, lmtp: true}
 
 	if err := c.Hello("localhost"); err != nil {
 		t.Fatalf("LHLO failed: %s", err)
@@ -882,10 +859,10 @@ func TestLMTPData(t *testing.T) {
 	if err := c.Mail("user@gmail.com", nil); err != nil {
 		t.Fatalf("MAIL failed: %s", err)
 	}
-	if err := c.Rcpt("golang-nuts@googlegroups.com"); err != nil {
+	if err := c.Rcpt("golang-nuts@googlegroups.com", nil); err != nil {
 		t.Fatalf("RCPT failed: %s", err)
 	}
-	if err := c.Rcpt("golang-not-nuts@googlegroups.com"); err != nil {
+	if err := c.Rcpt("golang-not-nuts@googlegroups.com", nil); err != nil {
 		t.Fatalf("RCPT failed: %s", err)
 	}
 	msg := `From: user@gmail.com
@@ -929,5 +906,98 @@ Goodbye.`
 
 	if err := c.Quit(); err != nil {
 		t.Fatalf("QUIT failed: %s", err)
+	}
+}
+
+var xtextClient = `MAIL FROM:<e=mc2@example.com> AUTH=e+3Dmc2@example.com
+RCPT TO:<e=mc2@example.com> ORCPT=UTF-8;e\x{3D}mc2@example.com
+`
+
+func TestClientXtext(t *testing.T) {
+	server := "220 hello world\r\n" +
+		"250 ok\r\n" +
+		"250 ok"
+	client := strings.Join(strings.Split(xtextClient, "\n"), "\r\n")
+	var wrote bytes.Buffer
+	var fake faker
+	fake.ReadWriter = struct {
+		io.Reader
+		io.Writer
+	}{
+		strings.NewReader(server),
+		&wrote,
+	}
+	c := NewClient(fake)
+	c.didHello = true
+	c.ext = map[string]string{"AUTH": "PLAIN", "DSN": ""}
+	email := "e=mc2@example.com"
+	c.Mail(email, &MailOptions{Auth: &email})
+	c.Rcpt(email, &RcptOptions{
+		OriginalRecipientType: DSNAddressTypeUTF8,
+		OriginalRecipient:     email,
+	})
+	c.Close()
+	if got := wrote.String(); got != client {
+		t.Errorf("wrote %q; want %q", got, client)
+	}
+}
+
+const (
+	dsnEnvelopeID  = "e=mc2"
+	dsnEmailRFC822 = "e=mc2@example.com"
+	dsnEmailUTF8   = "e=mc2@ドメイン名例.jp"
+)
+
+var dsnServer = `220 hello world
+250 ok
+250 ok
+250 ok
+250 ok
+`
+
+var dsnClient = `MAIL FROM:<e=mc2@example.com> RET=HDRS ENVID=e+3Dmc2
+RCPT TO:<e=mc2@example.com> NOTIFY=NEVER ORCPT=RFC822;e+3Dmc2@example.com
+RCPT TO:<e=mc2@example.com> NOTIFY=FAILURE,DELAY ORCPT=UTF-8;e\x{3D}mc2@\x{30C9}\x{30E1}\x{30A4}\x{30F3}\x{540D}\x{4F8B}.jp
+RCPT TO:<e=mc2@ドメイン名例.jp> ORCPT=UTF-8;e\x{3D}mc2@ドメイン名例.jp
+`
+
+func TestClientDSN(t *testing.T) {
+	server := strings.Join(strings.Split(dsnServer, "\n"), "\r\n")
+	client := strings.Join(strings.Split(dsnClient, "\n"), "\r\n")
+
+	var wrote bytes.Buffer
+	var fake faker
+	fake.ReadWriter = struct {
+		io.Reader
+		io.Writer
+	}{
+		strings.NewReader(server),
+		&wrote,
+	}
+	c := NewClient(fake)
+	c.didHello = true
+	c.ext = map[string]string{"DSN": ""}
+	c.Mail(dsnEmailRFC822, &MailOptions{
+		Return:     DSNReturnHeaders,
+		EnvelopeID: dsnEnvelopeID,
+	})
+	c.Rcpt(dsnEmailRFC822, &RcptOptions{
+		OriginalRecipientType: DSNAddressTypeRFC822,
+		OriginalRecipient:     dsnEmailRFC822,
+		Notify:                []DSNNotify{DSNNotifyNever},
+	})
+	c.Rcpt(dsnEmailRFC822, &RcptOptions{
+		OriginalRecipientType: DSNAddressTypeUTF8,
+		OriginalRecipient:     dsnEmailUTF8,
+		Notify:                []DSNNotify{DSNNotifyFailure, DSNNotifyDelayed},
+	})
+	c.ext["SMTPUTF8"] = ""
+	c.Rcpt(dsnEmailUTF8, &RcptOptions{
+		OriginalRecipientType: DSNAddressTypeUTF8,
+		OriginalRecipient:     dsnEmailUTF8,
+	})
+	c.Close()
+	if actualcmds := wrote.String(); client != actualcmds {
+		t.Errorf("wrote %q; want %q", actualcmds, client)
 	}
 }
